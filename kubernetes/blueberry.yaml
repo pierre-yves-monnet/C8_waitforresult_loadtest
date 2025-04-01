@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blueberry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blueberry
+  template:
+    metadata:
+      labels:
+        app: blueberry
+    spec:
+      containers:
+        - name: blueberry
+          image: ghcr.io/camunda-community-hub/blueberry:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: BLUEBERRY_CONTAINER_TYPE
+              value: azure
+            - name: BLUEBERRY_CONTAINER_AZURE_CONTAINERNAME
+              value: elasticsearchcontainer
+
+            - name: CAMUNDA_CLIENT_ZEEBE_GATEWAY-URL
+              value: http://camunda-zeebe-gateway:26500
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blueberry-service
+spec:
+  selector:
+    app: blueberry
+  ports:
+    - protocol: TCP
+      port: 9082
+      targetPort: 9082
+  type: ClusterIP
+

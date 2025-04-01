@@ -1,0 +1,28 @@
+# https://docs.camunda.io/docs/apis-tools/spring-zeebe-sdk/getting-started/
+# https://docs.camunda.io/docs/apis-tools/spring-zeebe-sdk/configuration/
+
+camunda:
+  client:
+    mode: selfmanaged
+    zeebe:
+      enabled: true
+      gatewayUrl: http://camunda-zeebe-gateway:26500
+      preferRestOverGrpc: false
+      execution-threads: 100
+      defaults:
+        max-jobs-active: 40
+
+
+waitforresult:
+  creator:
+    enabled: true
+    processId: WaitForResultLoadTest
+    numberOfLoops: 6000
+    numberOfThreads: 100
+
+  worker:
+    enabled: true
+
+logging:
+  level:
+    root: INFO
