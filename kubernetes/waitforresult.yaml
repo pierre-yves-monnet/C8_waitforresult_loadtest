@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: waitforresult
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: waitforresult-worker
+  template:
+    metadata:
+      labels:
+        app: waitforresult-worker
+    spec:
+      containers:
+        - name: waitforresult-creator
+          image: ghcr.io/pierre-yves-monnet/waitforresult:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: WAITFORRESULT_CREATOR_ENABLED
+              value: "false"
+            - name: WAITFORRESULT_WORKER_ENABLED
+              value: "true"
+            - name: CAMUNDA_CLIENT_ZEEBE_GRPC_ADDRESS
+              value: http://camunda-zeebe-gateway:26500
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: waitforresult-creator
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: waitforresult-creator
+  template:
+    metadata:
+      labels:
+        app: waitforresult-creator
+    spec:
+      containers:
+        - name: waitforresult-creator
+          image: ghcr.io/pierre-yves-monnet/waitforresult:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: WAITFORRESULT_CREATOR_ENABLED
+              value: "true"
+            - name: WAITFORRESULT_WORKER_ENABLED
+              value: "false"
+            - name: WAITFORRESULT_CREATOR_NUMBEROFTHREADS
+              value: "60"
+            - name: CAMUNDA_CLIENT_ZEEBE_GRPC_ADDRESS
+              value: http://camunda-zeebe-gateway:26500

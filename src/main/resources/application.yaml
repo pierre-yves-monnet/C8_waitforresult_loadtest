@@ -6,7 +6,7 @@ camunda:
     mode: selfmanaged
     zeebe:
       enabled: true
-      gatewayUrl: http://camunda-zeebe-gateway:26500
+      grpc-address: http://localhost:26500
       preferRestOverGrpc: false
       execution-threads: 100
       defaults:
@@ -18,7 +18,7 @@ waitforresult:
     enabled: true
     processId: WaitForResultLoadTest
     numberOfLoops: 6000
-    numberOfThreads: 100
+    numberOfThreads: 40
 
   worker:
     enabled: true

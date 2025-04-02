@@ -7,7 +7,7 @@
 
   <groupId>com.camunda.loadtest</groupId>
   <artifactId>withresult</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.4</version>
   <packaging>jar</packaging>
 
   <name>c8-getting-started-microservice-orchestration</name>
@@ -82,9 +82,9 @@
         </executions>
         <configuration>
           <classifier>exec</classifier>
-          <mainClass>io.camunda.BlueberryApplication</mainClass>
+          <mainClass>io.camunda.loadtest.LoadApplication</mainClass>
           <image>
-            <name>ghcr.io/camunda-community-hub/blueberry:latest</name>
+            <name>ghcr.io/pierre-yves-monnet/waitforresult:latest</name>
           </image>
         </configuration>
       </plugin>

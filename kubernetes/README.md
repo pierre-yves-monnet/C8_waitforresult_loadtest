@@ -12,7 +12,7 @@ The deployment must be run in the same cluster as Zeebe. If it is a different cl
 # Operation
 
 ```shell
-kubectl create -f blueberry.yaml
+kubectl create -f waitforresult.yaml
 ```
 
 Forward the Blueberry access 
@@ -24,6 +24,6 @@ kubectl port-forward svc/blueberry-service 9082:9082 -n camunda
 # Remove Blueberry
 
 ```shell
-kubectl delete -f blueberry.yaml
+kubectl delete -f waitforresult.yaml
 ```
 
