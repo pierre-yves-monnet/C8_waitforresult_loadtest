@@ -1,6 +1,7 @@
 package io.camunda.loadtest.loader;
 
 import io.camunda.loadtest.executor.ExecuteWithResult;
+import io.camunda.loadtest.executor.ResultWorker;
 import io.camunda.loadtest.executor.WithResultAPI;
 import io.camunda.zeebe.client.ZeebeClient;
 import org.slf4j.Logger;
@@ -33,21 +34,27 @@ public class LoaderC8 {
     @Value("${waitforresult.creator.enabled:true}")
     private Boolean enabledCreator;
 
+    @Value("${waitforresult.creator.topicPrefix:end-result}")
+    private String prefixTopicCreation;
+
+
+    @Value("${waitforresult.creator.timeoutCreationInMs:50000}")
+    private Long timeoutCreationInMs;
+
     @Value("${waitforresult.message.enabled:false}")
     private Boolean enabledMessage;
 
     @Value("${waitforresult.message.name:blue}")
     private String messageName;
 
-    @Value("${waitforresult.worker.implementation:DYNAMIC}")
-    private String workerImplementation;
-
-    @Value("${waitforresult.creator.topicPrefix:end-result}")
-    private String prefixTopicCreation;
-
     @Value("${waitforresult.message.topicPrefix:end-message}")
     private String prefixTopicMessage;
 
+    @Value("${waitforresult.message.timeoutCreationInMs:50000}")
+    private Long timeoutMessageInMs;
+
+    @Value("${waitforresult.resultworker.implementation:HOST}")
+    private String workerImplementation;
 
     @Autowired
     ZeebeClient zeebeClient;
@@ -65,27 +72,29 @@ public class LoaderC8 {
         report.put(TYPE_REPORT.MESSAGE, new ConcurrentHashMap<>());
 
         if (enabledCreator) {
-            logger.info("Enable Creator numberOfThreads {} Loops {} EnableCreator {} enableMessage {}",
-                    numberOfThreads, numberOfLoops,
-                    enabledCreator, enabledMessage);
 
-            WithResultAPI.WorkerImplementation strategy;
+            ResultWorker.WorkerImplementation strategy;
             try {
-                strategy = WithResultAPI.WorkerImplementation.valueOf(workerImplementation);
+                strategy = ResultWorker.WorkerImplementation.valueOf(workerImplementation);
             } catch (Exception e) {
                 logger.error("Unknown worker implementation {}, choose DYNAMIC", workerImplementation);
-                strategy = WithResultAPI.WorkerImplementation.DYNAMIC;
+                strategy = ResultWorker.WorkerImplementation.DYNAMIC;
             }
-            withResultAPI = new WithResultAPI(zeebeClient, null, false, false, strategy);
 
             String podName = String.valueOf(System.currentTimeMillis());
             try {
                 podName = InetAddress.getLocalHost().getHostName();
-
             } catch (Exception e) {
                 logger.error("Can't get inetAddress: " + e.getMessage());
             }
+            logger.info("Enable Creator ResultImplementation {} numberOfThreads {} Loops {} EnableCreator {} enableMessage {} podName{}",
+                    strategy.toString(),
+                    numberOfThreads, numberOfLoops,
+                    enabledCreator, enabledMessage,
+                    podName);
 
+
+            withResultAPI = new WithResultAPI(zeebeClient, null, false, false, strategy);
 
             // Creation section
             ExecutorService executorCreation = Executors.newFixedThreadPool(numberOfThreads);
@@ -130,6 +139,7 @@ public class LoaderC8 {
         long totalExecutionTime = 0;
         int correct = 0;
         int errors = 0;
+        int timeout=0;
         Report report = getReport(TYPE_REPORT.CREATOR, prefix);
         report.markBeginTime();
 
@@ -141,10 +151,12 @@ public class LoaderC8 {
                 String jobKey = podName + "_" + prefix + "_" + i;
 
                 variables.put("applicationKeyColor", jobKey);
-                ExecuteWithResult execute = withResultAPI.processInstanceWithResult(processId, variables, jobKey, prefixTopicCreation, 50000L);
+                ExecuteWithResult execute = withResultAPI.processInstanceWithResult(processId, variables, jobKey, prefixTopicCreation, timeoutCreationInMs);
 
-                if (execute.creationError) {
+                if (execute.creationError ) {
                     errors++;
+                } else if (execute.timeOut) {
+                    timeout++;
                 } else {
                     totalExecutionTime += execute.executionTime;
                     correct++;
@@ -159,19 +171,21 @@ public class LoaderC8 {
                 errors++;
             }
             if (i % 10 == 0 && i > 0) {
-                if (i % 200 == 0)
+                if (i % 500 == 0)
                     logger.info("Creator {} loop {}/{} correct {} error {} averageTime/exec {} ms", prefix, (i + 1), numberOfLoops, correct, errors, totalExecutionTime / (correct == 0 ? 1 : correct));
                 report = getReport(TYPE_REPORT.CREATOR, prefix);
                 report.countLoops = i;
-                report.correct = correct;
+                report.corrects = correct;
                 report.errors = errors;
+                report.timeouts = timeout;
                 report.totalExecutionTime = totalExecutionTime;
 
             }
         } // end loop
         report = getReport(TYPE_REPORT.CREATOR, prefix);
         report.markEndTime();
-        logger.info("Creator {} loop {} correct {} error {} averageTime/exec {} ms", prefix, numberOfLoops, correct, errors, totalExecutionTime / correct);
+        logger.info("Creator {} loop {} corrects {} errors {} timeout {} averageTime/exec {} ms",
+                prefix, numberOfLoops, correct, errors, timeout, totalExecutionTime / correct);
 
     }
 
@@ -183,8 +197,9 @@ public class LoaderC8 {
      */
     public final void executeMessage(String podName, int prefix, int numberOfLoops) {
         long totalExecutionTime = 0;
-        int correct = 0;
+        int corrects = 0;
         int errors = 0;
+        int timeouts=0;
         try {
             Report report = getReport(TYPE_REPORT.MESSAGE, prefix);
 
@@ -192,6 +207,12 @@ public class LoaderC8 {
             while (count < numberOfLoops) {
                 count++;
                 ResultCreation resultCreation = queue.take();
+
+                // Need to start the begin time to calculate the throughput
+                if (report.beginTime==null)
+                    report.markBeginTime();
+
+
                 // Process this result
                 // THe jobKey is the correlation value.
                 // To be sure to have the end, we add  "_msg_" for the new jobKey
@@ -203,24 +224,28 @@ public class LoaderC8 {
                             Collections.emptyMap(),
                             resultCreation.resultData,
                             prefixTopicMessage,
-                            50000L);
-                    if (execute.messageError || execute.timeOut) {
+                            timeoutMessageInMs);
+                    if (execute.messageError ) {
                         errors++;
+                    } else if (execute.timeOut) {
+                        timeouts++;
                     } else {
                         totalExecutionTime += execute.executionTime;
-                        correct++;
+                        corrects++;
                     }
+
                 } catch (Exception e) {
                     logger.error("Error During execution with result {}", e.getMessage());
                     errors++;
                 }
                 if (count % 10 == 0 && count > 0) {
-                    if (count % 200 == 0)
-                        logger.info("Message {} loop {}/{} correct {} error {} averageTime/exec {} ms", prefix, count, numberOfLoops, correct, errors, totalExecutionTime / (correct == 0 ? 1 : correct));
+                    if (count % 500 == 0)
+                        logger.info("Message {} loop {}/{} correct {} error {} averageTime/exec {} ms", prefix, count, numberOfLoops, corrects, errors, totalExecutionTime / (corrects == 0 ? 1 : corrects));
                     report = getReport(TYPE_REPORT.MESSAGE, prefix);
                     report.countLoops = count;
-                    report.correct = correct;
+                    report.corrects = corrects;
                     report.errors = errors;
+                    report.timeouts = timeouts;
                     report.totalExecutionTime = totalExecutionTime;
 
                 }
@@ -237,12 +262,14 @@ public class LoaderC8 {
         int sumLoops = 0;
         int sumCorrects = 0;
         int sumErrors = 0;
+        int sumTimeouts = 0;
         double sumThroughput = 0;
         int sumTotalExecutionTime = 0;
         for (TYPE_REPORT type : TYPE_REPORT.values()) {
             int countLoops = 0;
             int corrects = 0;
             int errors = 0;
+            int timeouts = 0;
             int totalExecutionTime = 0;
             List<Report> listReport = collectReports(type);
 
@@ -250,8 +277,9 @@ public class LoaderC8 {
             boolean stillRunning = false;
             for (Report report : report.get(type).values()) {
                 countLoops += report.countLoops;
-                corrects += report.correct;
+                corrects += report.corrects;
                 errors += report.errors;
+                timeouts += report.timeouts;
                 totalExecutionTime += report.totalExecutionTime;
                 double reportThroughput = report.calculateThroughput();
                 if (reportThroughput >= 0) {
@@ -263,9 +291,10 @@ public class LoaderC8 {
             sumLoops += countLoops;
             sumCorrects += corrects;
             sumErrors += errors;
+            sumTimeouts += timeouts;
             sumTotalExecutionTime += totalExecutionTime;
             sumThroughput += localThroughput;
-            logger.info("----- SYNTHESIS {}:  {} AVERAGE {} ms, THROUGHPUT {} exec/s loop {}/{} ({} %) corrects {} error {}  for {} agents",
+            logger.info("----- SYNTHESIS {}:  {} AVERAGE {} ms, THROUGHPUT {} exec/s loop {}/{} ({} %) corrects {} errors {} timeouts {} for {} agents",
                     type.toString(),
                     stillRunning ? "RUNNING" : "FINISH",
                     totalExecutionTime / Math.max(1, corrects),
@@ -275,9 +304,10 @@ public class LoaderC8 {
                     String.format("%.2f", (double) 100 * countLoops / (numberOfLoops * numberOfThreads)),
                     corrects,
                     errors,
+                    sumTimeouts,
                     numberOfThreads);
         }
-        logger.info("----- SYNTHESIS TOTAL:  AVERAGE {} ms, THROUGHPUT {} exec/s loop {}/{} ({} %) correct {} error {}  for {} agents",
+        logger.info("----- SYNTHESIS TOTAL:  AVERAGE {} ms, THROUGHPUT {} exec/s loop {}/{} ({} %) corrects {} errors {} timeouts {} for {} agents",
                 sumTotalExecutionTime / Math.max(1, sumCorrects),
                 String.format("%.1f", sumThroughput),
                 sumLoops,
@@ -285,6 +315,7 @@ public class LoaderC8 {
                 String.format("%.2f", (double) 100 * sumLoops / (numberOfLoops * numberOfThreads)),
                 sumCorrects,
                 sumErrors,
+                sumTimeouts,
                 numberOfThreads);
     }
 
@@ -313,8 +344,9 @@ public class LoaderC8 {
 
     private class Report {
         public int countLoops;
-        public int correct;
+        public int corrects;
         public int errors;
+        public int timeouts;
         public long totalExecutionTime;
         public int prefix;
         public Long beginTime;
@@ -327,8 +359,9 @@ public class LoaderC8 {
         public Report getCopy() {
             Report report = new Report(prefix);
             report.countLoops = countLoops;
-            report.correct = correct;
+            report.corrects = corrects;
             report.errors = errors;
+            report.timeouts = timeouts;
             report.totalExecutionTime = totalExecutionTime;
             report.beginTime = beginTime;
             report.endTime = endTime;
@@ -341,10 +374,10 @@ public class LoaderC8 {
          * @return
          */
         public double calculateThroughput() {
-            if (beginTime == null || correct == 0)
+            if (beginTime == null || corrects == 0)
                 return -1;
             long endTimeSnapshot = endTime == null ? System.currentTimeMillis() : endTime;
-            return (1000.0 * correct / (endTimeSnapshot - beginTime));
+            return (1000.0 * corrects / (endTimeSnapshot - beginTime));
         }
 
         public void markBeginTime() {

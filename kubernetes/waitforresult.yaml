@@ -33,7 +33,7 @@ kind: Deployment
 metadata:
   name: wfr-creator
 spec:
-  replicas: 6
+  replicas: 2
   selector:
     matchLabels:
       app: wfr-creator
@@ -48,21 +48,27 @@ spec:
           ports:
             - containerPort: 8080
           env:
+            - name: WAITFORRESULT_WORKER_ENABLED
+              value: "false"
             - name: WAITFORRESULT_CREATOR_ENABLED
               value: "true"
             - name: WAITFORRESULT_MESSAGE_ENABLED
-              value: "false"
-            - name: WAITFORRESULT_MESSAGE_NAME
-              value: "blue"
-            - name: WAITFORRESULT_WORKER_ENABLED
-              value: "false"
+              value: "true"
             - name: WAITFORRESULT_CREATOR_NUMBEROFTHREADS
-              value: "60"
+              value: "23"
+            - name: WAITFORRESULT_CREATOR_NUMBEROFLOOPS
+              value: "10000"
             - name: WAITFORRESULT_CREATOR_PROCESSID
               value: WaitForResultLoadTest
             - name: WAITFORRESULT_CREATOR_TOPICPREFIX
               value: "end-creation-"
+            - name: WAITFORRESULT_MESSAGE_NAME
+              value: "blue"
             - name: WAITFORRESULT_MESSAGE_TOPICPREFIX
               value: "end-msg-"
+            - name: WAITFORRESULT_RESULTWORKER_IMPLEMENTATION
+              value: HOST
+
+
             - name: CAMUNDA_CLIENT_ZEEBE_GRPC_ADDRESS
               value: http://camunda-zeebe-gateway:26500

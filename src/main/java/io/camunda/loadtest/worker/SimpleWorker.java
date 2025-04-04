@@ -60,14 +60,14 @@ public class SimpleWorker {
 
     private class HandleInitServiceTask implements JobHandler {
         public void handle(JobClient jobClient, ActivatedJob activatedJob) throws Exception {
-            // logger.info("Job handled: " + activatedJob.getType());
+            logger.debug("Job handled: Type[{}] PI[{}]" , activatedJob.getType(), activatedJob.getProcessInstanceKey());
             jobClient.newCompleteCommand(activatedJob.getKey()).send();
         }
     }
 
     private class MiddleServiceTask implements JobHandler {
         public void handle(JobClient jobClient, ActivatedJob activatedJob) throws Exception {
-            // logger.info("Job handled: " + job.getType());
+            logger.debug("Job handled: Type[{}] PI[{}]" , activatedJob.getType(), activatedJob.getProcessInstanceKey());
             jobClient.newCompleteCommand(activatedJob.getKey()).send();
         }
     }
@@ -75,7 +75,7 @@ public class SimpleWorker {
 
     private class CloseServiceTask implements JobHandler {
         public void handle(JobClient jobClient, ActivatedJob activatedJob) throws Exception {
-            // logger.info("Job handled: " + job.getType());
+            logger.debug("Job handled: Type[{}] PI[{}]" , activatedJob.getType(), activatedJob.getProcessInstanceKey());
             jobClient.newCompleteCommand(activatedJob.getKey()).send();
         }
     }

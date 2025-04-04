@@ -14,12 +14,14 @@ camunda:
 
 
 waitforresult:
+
   creator:
     enabled: true
     processId: WaitForResultLoadTest
     numberOfLoops: 6000
     numberOfThreads: 40
     topicPrefix: end-creation-
+    timeoutCreationInMs: 50000
 
 
 
@@ -28,6 +30,7 @@ waitforresult:
     enabled: true
     name: blue
     topicPrefix: end-msg-
+    timeoutMessageInMs: 50000
 
   worker:
     enabled: true

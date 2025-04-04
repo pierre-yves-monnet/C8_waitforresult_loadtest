@@ -8,12 +8,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.camunda.tasklist.dto.Task;
 
+import java.net.InetAddress;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
 public class WithResultAPI {
+  public static final String PROCESS_VARIABLE_JOB_KEY = "jobKey";
+  public static final String PROCESS_VARIABLE_TOPIC_END_RESULT = "topicEndResult";
   Logger logger = LoggerFactory.getLogger(WithResultAPI.class.getName());
 
   private final static String PROCESS_VARIABLE_SNITCH = "SNITCH";
@@ -28,19 +31,29 @@ public class WithResultAPI {
   private final boolean useTaskAPI;
 
 
-  DynamicWorker workerImplementation;
+  ResultWorker resultWorker;
 
-  public enum WorkerImplementation { DYNAMIC, HOST}
   public WithResultAPI(ZeebeClient zeebeClient,
                        CamundaTaskListClient taskClient,
                        boolean doubleCheck,
                        boolean useTaskAPI,
-                       WorkerImplementation workerImplementation) {
+                       ResultWorker.WorkerImplementation resultWorker) {
     this.zeebeClient = zeebeClient;
     this.taskClient = taskClient;
     this.doubleCheck = doubleCheck;
     this.useTaskAPI = useTaskAPI;
-    this.workerImplementation = new DynamicWorker(zeebeClient);
+    String podName = String.valueOf(System.currentTimeMillis());
+    try {
+      podName = InetAddress.getLocalHost().getHostName();
+
+    } catch (Exception e) {
+      logger.error("Can't get inetAddress: " + e.getMessage());
+    }
+
+    switch(resultWorker) {
+      case HOST -> this.resultWorker = new ResultWorkerHost(zeebeClient, podName);
+      case DYNAMIC -> this.resultWorker = new ResultWorkerDynamic(zeebeClient);
+    }
   }
 
 
@@ -68,7 +81,7 @@ public class WithResultAPI {
     logger.debug("ExecuteTaskWithResult[{}]", jobKey);
     int snitchValue = random.nextInt(10000);
 
-    DynamicWorker.LockObjectTransporter lockObjectTransporter= workerImplementation.openTransaction( "ExecuteTask", prefixTopicWorker, jobKey );
+    ResultWorkerDynamic.LockObjectTransporter lockObjectTransporter= resultWorker.openTransaction( "ExecuteTask", prefixTopicWorker, jobKey );
 
 
     // Now, create a worker just for this jobKey
@@ -105,7 +118,7 @@ public class WithResultAPI {
     }
 
     // Now, we block the thread and wait for a result
-    workerImplementation.waitForResult(lockObjectTransporter, timeoutDurationInMs);
+    resultWorker.waitForResult(lockObjectTransporter, timeoutDurationInMs);
 
 
     // retrieve the taskId where the currentprocess instance is
@@ -114,7 +127,7 @@ public class WithResultAPI {
 
     // we got the result
     // we can close the worker now
-    workerImplementation.closeTransaction(lockObjectTransporter);
+    resultWorker.closeTransaction(lockObjectTransporter);
 
     Long endTime = System.currentTimeMillis();
     executeWithResult.processInstance = Long.valueOf(userTask.getProcessInstanceKey());
@@ -169,17 +182,18 @@ public class WithResultAPI {
 
     // Now, create a worker just for this jobKey
     logger.debug("Register worker[{}]", "end-result-" + jobKey);
-    DynamicWorker.LockObjectTransporter lockObjectTransporter= workerImplementation.openTransaction( "createProcessInstance", prefixTopicWorker, jobKey );
+    ResultWorkerDynamic.LockObjectTransporter lockObjectTransporter= resultWorker.openTransaction( "createProcessInstance", prefixTopicWorker, jobKey );
 
-    Map<String, Object> userVariables = new HashMap<>();
-    userVariables.put("jobKey", jobKey);
-    userVariables.putAll(variables);
+    Map<String, Object> processVariables = new HashMap<>();
+    processVariables.put(PROCESS_VARIABLE_JOB_KEY, jobKey);
+    processVariables.put(PROCESS_VARIABLE_TOPIC_END_RESULT, resultWorker.getTopic("createProcessInstance", prefixTopicWorker, jobKey));
+    processVariables.putAll(variables);
     ExecuteWithResult executeWithResult = new ExecuteWithResult();
 
     // save the variable jobId
       try {
 
-        ProcessInstanceEvent processInstanceEvent = zeebeClient.newCreateInstanceCommand().bpmnProcessId(processId).latestVersion().variables(userVariables).send().join();
+        ProcessInstanceEvent processInstanceEvent = zeebeClient.newCreateInstanceCommand().bpmnProcessId(processId).latestVersion().variables(processVariables).send().join();
         executeWithResult.processInstance = processInstanceEvent.getProcessInstanceKey();
         // logger.info("Create process instance {} jobKey [{}]", executeWithResult.processInstance,jobKey);
       } catch (Exception e) {
@@ -189,7 +203,7 @@ public class WithResultAPI {
       }
 
     // Now, we block the thread and wait for a result
-    workerImplementation.waitForResult(lockObjectTransporter, timeoutDurationInMs);
+    resultWorker.waitForResult(lockObjectTransporter, timeoutDurationInMs);
 
     // logger.debug("Receive answer jobKey[{}] notification? {} inprogress {}", jobKey, lockObjectTransporter.notification, lockObjectsMap.size());
 
@@ -197,7 +211,7 @@ public class WithResultAPI {
     executeWithResult.elementId = lockObjectTransporter.elementId;
     executeWithResult.elementInstanceKey = lockObjectTransporter.elementInstanceKey;
 
-    workerImplementation.closeTransaction( lockObjectTransporter);
+    resultWorker.closeTransaction( lockObjectTransporter);
 
     Long endTime = System.currentTimeMillis();
     executeWithResult.executionTime = endTime - beginTime;
@@ -252,10 +266,11 @@ public class WithResultAPI {
 
     // Now, create a worker just for this jobKey
     logger.debug("Register worker[{}]", "end-result-" + jobKey);
-    DynamicWorker.LockObjectTransporter lockObjectTransporter= workerImplementation.openTransaction("publishMessage", prefixTopicWorker, jobKey );
+    ResultWorkerDynamic.LockObjectTransporter lockObjectTransporter= resultWorker.openTransaction("publishMessage", prefixTopicWorker, jobKey );
 
     Map<String, Object> messageVariables = new HashMap<>();
     messageVariables.put("jobKey", jobKey);
+    messageVariables.put("topicEndResult", resultWorker.getTopic("createProcessInstance", prefixTopicWorker, jobKey));
     messageVariables.putAll(variables);
     ExecuteWithResult executeWithResult = new ExecuteWithResult();
 
@@ -279,7 +294,7 @@ public class WithResultAPI {
     }
 
     // Now, we block the thread and wait for a result
-    workerImplementation.waitForResult(lockObjectTransporter, timeoutDurationInMs);
+    resultWorker.waitForResult(lockObjectTransporter, timeoutDurationInMs);
 
     // logger.debug("Receive answer jobKey[{}] notification? {} inprogress {}", jobKey, lockObjectTransporter.notification, lockObjectsMap.size());
 
@@ -287,7 +302,7 @@ public class WithResultAPI {
     executeWithResult.elementId = lockObjectTransporter.elementId;
     executeWithResult.elementInstanceKey = lockObjectTransporter.elementInstanceKey;
 
-    workerImplementation.closeTransaction( lockObjectTransporter);
+    resultWorker.closeTransaction( lockObjectTransporter);
 
     Long endTime = System.currentTimeMillis();
     executeWithResult.executionTime = endTime - beginTime;

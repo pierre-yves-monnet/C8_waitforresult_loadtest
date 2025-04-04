@@ -1,5 +1,6 @@
 package io.camunda.loadtest.executor;
 
+
 import io.camunda.zeebe.client.ZeebeClient;
 import io.camunda.zeebe.client.api.response.ActivatedJob;
 import io.camunda.zeebe.client.api.worker.JobClient;
@@ -12,28 +13,46 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * This implementation use the Dynamic worker implementation
+ * This implementation create one worker immediately, per host.
+ * In the process varaible, a value "jobKey" is present, to find the correct thread to unlock
+ *
  */
-public class DynamicWorker {
-    Logger logger = LoggerFactory.getLogger(DynamicWorker.class.getName());
+public class ResultWorkerHost extends ResultWorker {
+
+    Logger logger = LoggerFactory.getLogger(ResultWorkerHost.class.getName());
 
     ZeebeClient zeebeClient;
-    HandleMarker handleMarker = new HandleMarker();
+    HandlerEndResult HandleMarker= new HandlerEndResult();
 
-    DynamicWorker(ZeebeClient zeebeClient) {
+
+    ConcurrentHashMap<String, JobWorker> mapWorker = new ConcurrentHashMap<>();
+
+    String podName;
+    ResultWorkerHost(ZeebeClient zeebeClient, String podName) {
         this.zeebeClient = zeebeClient;
+        this.podName = podName;
     }
 
+    @Override
+    public void initialize() {
+
+    }
+
+    /**
+     * Open the transaction. Create a dedicated worker for this transaction.
+     * @param context
+     * @param prefixTopicWorker
+     * @param jobKey
+     * @return
+     */
+    @Override
     public LockObjectTransporter openTransaction(String context, String prefixTopicWorker, String jobKey) {
         LockObjectTransporter lockObjectTransporter = new LockObjectTransporter();
         lockObjectTransporter.jobKey = jobKey;
         lockObjectTransporter.context = context;
-        logger.debug("Register worker[{}]", prefixTopicWorker + jobKey);
-        lockObjectTransporter.worker =  zeebeClient.newWorker()
-                .jobType(prefixTopicWorker + jobKey)
-                .handler(handleMarker)
-                .streamEnabled(true)
-                .open();
+        JobWorker worker = getWorker(getTopic(context, prefixTopicWorker,jobKey));
+
+        logger.debug("Register on prefix[{}] jobKey[{}]", prefixTopicWorker+podName, jobKey);
         synchronized (lockObjectsMap) {
             lockObjectsMap.put(jobKey, lockObjectTransporter);
         }
@@ -41,6 +60,20 @@ public class DynamicWorker {
         return lockObjectTransporter;
     }
 
+    /**
+     * The topic is different per host
+     * @param context
+     * @param prefixTopicWorker
+     * @param jobKey
+     * @return
+     */
+    @Override
+    public String getTopic(String context, String prefixTopicWorker, String jobKey)
+    {
+        return prefixTopicWorker+podName;
+    }
+
+    @Override
     public void waitForResult(LockObjectTransporter lockObjectTransporter, long timeOut) {
         lockObjectTransporter.waitForResult(timeOut);
         logger.debug("Receive answer jobKey[{}] notification? {} inprogress {} context{}",
@@ -51,28 +84,44 @@ public class DynamicWorker {
 
     }
 
+    @Override
     public void closeTransaction(LockObjectTransporter lockObjectTransporter) {
         // we got the result
         // we can close the worker now
-        lockObjectTransporter.worker.close();
         synchronized (lockObjectsMap) {
             lockObjectsMap.remove(lockObjectTransporter.jobKey);
         }
     }
 
 
+private JobWorker getWorker(String topicName) {
+    JobWorker worker = mapWorker.get(topicName);
+    if (worker == null) {
+        synchronized (this) {
+            if (mapWorker.get(topicName) == null) {
+                worker = zeebeClient.newWorker()
+                        .jobType(topicName)
+                        .handler(HandleMarker)
+                        .streamEnabled(true)
+                        .open();
+                mapWorker.put(topicName, worker);
+            }
+        }
+    }
+    return worker;
 
+}
     /**
      * Handle the job. This worker register under the correct topic, and capture when it's come here
      */
-    private class HandleMarker implements JobHandler {
+    private class HandlerEndResult implements JobHandler {
         public void handle(JobClient jobClient, ActivatedJob activatedJob) throws Exception {
             // Get the variable "lockKey"
             jobClient.newCompleteCommand(activatedJob.getKey()).send();
 
-            String jobKey = (String) activatedJob.getVariable("jobKey");
+            String jobKey = (String) activatedJob.getVariable(WithResultAPI.PROCESS_VARIABLE_JOB_KEY);
             // logger.info("Handle marker for jobKey[{}]", jobKey);
-            DynamicWorker.LockObjectTransporter lockObjectTransporter = lockObjectsMap.get(jobKey);
+            ResultWorkerDynamic.LockObjectTransporter lockObjectTransporter = lockObjectsMap.get(jobKey);
 
             if (lockObjectTransporter == null) {
                 logger.error("No object for jobKey[{}]", jobKey);
@@ -81,7 +130,7 @@ public class DynamicWorker {
             lockObjectTransporter.processVariables = activatedJob.getVariablesAsMap();
             lockObjectTransporter.elementId = activatedJob.getElementId();
             lockObjectTransporter.elementInstanceKey = activatedJob.getElementInstanceKey();
-            logger.debug("HandleMarker jobKey[{}] variables[{}]", jobKey, lockObjectTransporter.processVariables);
+            logger.debug("HandleMarkerDynamicWorker jobKey[{}] variables[{}]", jobKey, lockObjectTransporter.processVariables);
 
             // Notify the thread waiting on this item
             lockObjectTransporter.notifyResult();
@@ -90,35 +139,8 @@ public class DynamicWorker {
 
 
 
-    public class LockObjectTransporter {
-        public String jobKey;
-        // With result will return the process variable here
-        public Map<String, Object> processVariables;
-        // elementId is the ID of the element, defined as the ID in the modeler. Example "ReviewApplication"
-        public String elementId;
-        // EleemntKey is the uniq key. Each instance has it's own key
-        public long elementInstanceKey;
-
-        public String context;
-        public JobWorker worker;
-        public boolean notification = false;
-
-        public synchronized void waitForResult(long timeoutDurationInMs) {
-            try {
-                logger.debug("Wait on object[{}]", this);
-                wait(timeoutDurationInMs);
-            } catch (InterruptedException e) {
-                logger.error("Can' wait ", e);
-            }
-        }
-
-        public synchronized void notifyResult() {
-            logger.debug("Notify on object[{}]", this);
-            notification = true;
-            notify();
-        }
-    }
 
     static final Map<String, LockObjectTransporter> lockObjectsMap = new ConcurrentHashMap<>();
+
 
 }

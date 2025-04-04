@@ -14,12 +14,15 @@ camunda:
 
 
 waitforresult:
+  resultworker:
+    implementation: HOST
   creator:
     enabled: true
     processId: WaitForResultLoadTest
     numberOfLoops: 6000
-    numberOfThreads: 1
+    numberOfThreads: 5
     topicPrefix: end-creation-
+    timeoutCreationInMs: 50000
 
   message:
     # Enable the message only if you enabled the creator: source of data is produce by the creator
@@ -27,9 +30,10 @@ waitforresult:
     name: blue
     topicPrefix: end-msg-
 
+
   worker:
     enabled: true
-    implementation: DYNAMIC
+
 
 
 logging:

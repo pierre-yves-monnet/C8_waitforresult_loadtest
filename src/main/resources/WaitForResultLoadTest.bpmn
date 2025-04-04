@@ -40,7 +40,7 @@
     <bpmn:sequenceFlow id="Flow_0vlsrff" sourceRef="Activity_0cu7pc4" targetRef="Activity_1mp73ml" />
     <bpmn:serviceTask id="Activity_0cu7pc4" name="end result 1">
       <bpmn:extensionElements>
-        <zeebe:taskDefinition type="=&#34;end-creation-&#34;+jobKey" />
+        <zeebe:taskDefinition type="=topicEndResult" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_0czcs8z</bpmn:incoming>
       <bpmn:outgoing>Flow_0vlsrff</bpmn:outgoing>
@@ -62,7 +62,7 @@
     </bpmn:serviceTask>
     <bpmn:serviceTask id="Activity_0i9yjun" name="end result 2">
       <bpmn:extensionElements>
-        <zeebe:taskDefinition type="=&#34;end-msg-&#34;+jobKey" />
+        <zeebe:taskDefinition type="=topicEndResult" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_07ttd0h</bpmn:incoming>
       <bpmn:outgoing>Flow_18rngz9</bpmn:outgoing>
@@ -80,7 +80,7 @@
     </bpmn:serviceTask>
     <bpmn:serviceTask id="Activity_15rkk7d" name="end result 3">
       <bpmn:extensionElements>
-        <zeebe:taskDefinition type="=&#34;end-result-&#34;+jobKey" />
+        <zeebe:taskDefinition type="=topicEndResult" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_087c4d2</bpmn:incoming>
       <bpmn:outgoing>Flow_0s1bo5r</bpmn:outgoing>
