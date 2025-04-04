@@ -7,13 +7,11 @@ mvn clean install
 
 # Create the docker image
 
-
-
 ````
 docker rmi pierre-yves-monnet/waitforresult:1.0.0
 docker rmi ghcr.io/pierre-yves-monnet/waitforresult:1.0.0
 
-docker build -t pierre-yves-monnet/waitforresult:1.0.6 .
+docker build -t pierre-yves-monnet/waitforresult:1.0.8 .
 ````
 
 The docker image is built using the Dockerfile present on the root level.
@@ -23,7 +21,7 @@ The docker image is built using the Dockerfile present on the root level.
 Push the image to my personal ghcr
 
 ````
-docker tag pierre-yves-monnet/waitforresult:1.0.6 ghcr.io/pierre-yves-monnet/waitforresult:latest
+docker tag pierre-yves-monnet/waitforresult:1.0.8 ghcr.io/pierre-yves-monnet/waitforresult:latest
 docker push ghcr.io/pierre-yves-monnet/waitforresult:latest
 ````
 

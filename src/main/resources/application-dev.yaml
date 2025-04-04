@@ -18,10 +18,8 @@ waitforresult:
     enabled: true
     processId: WaitForResultLoadTest
     numberOfLoops: 6000
-    numberOfThreads: 40
+    numberOfThreads: 1
     topicPrefix: end-creation-
-
-
 
   message:
     # Enable the message only if you enabled the creator: source of data is produce by the creator
@@ -32,6 +30,7 @@ waitforresult:
   worker:
     enabled: true
     implementation: DYNAMIC
+
 
 logging:
   level:

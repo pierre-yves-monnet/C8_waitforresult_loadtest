@@ -13,7 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConfigurationProperties(value = "waitforresult")
+@ConfigurationProperties()
 public class SimpleWorker {
 
     Logger logger = LoggerFactory.getLogger(SimpleWorker.class.getName());

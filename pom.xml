@@ -7,7 +7,7 @@
 
   <groupId>com.camunda.loadtest</groupId>
   <artifactId>withresult</artifactId>
-  <version>1.0.4</version>
+  <version>1.0.7</version>
   <packaging>jar</packaging>
 
   <name>c8-getting-started-microservice-orchestration</name>
@@ -29,11 +29,19 @@
       <artifactId>spring-boot-starter-logging</artifactId>
       <version>3.3.5</version>
     </dependency>
- <!--   <dependency>
-      <groupId>org.camunda.executewithresult</groupId>
-      <artifactId>execute-with-result</artifactId>
-      <version>1.8.0</version>
-    </dependency>-->
+
+
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-tasklist-client-java</artifactId>
+      <version>8.5.3.5</version>
+    </dependency>
+
+    <!--   <dependency>
+         <groupId>org.camunda.executewithresult</groupId>
+         <artifactId>execute-with-result</artifactId>
+         <version>1.8.0</version>
+       </dependency>-->
   </dependencies>
 
   <build>
