@@ -17,55 +17,39 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 
+
 @Component
 @ConfigurationProperties()
 
 public class LoaderC8 {
     Logger logger = LoggerFactory.getLogger(LoaderC8.class.getName());
-
+    @Autowired
+    ZeebeClient zeebeClient;
+    WithResultAPI withResultAPI;
+    Map<TYPE_REPORT, Map<Integer, Report>> report = new HashMap<>();
+    BlockingQueue<ResultCreation> queue = new LinkedBlockingQueue<>(10000);
     @Value("${waitforresult.creator.processId:}")
     private String processId;
-
     @Value("${waitforresult.creator.numberOfLoops:}")
     private int numberOfLoops;
     @Value("${waitforresult.creator.numberOfThreads:1}")
     private int numberOfThreads;
-
     @Value("${waitforresult.creator.enabled:true}")
     private Boolean enabledCreator;
-
     @Value("${waitforresult.creator.topicPrefix:end-result}")
     private String prefixTopicCreation;
-
-
     @Value("${waitforresult.creator.timeoutCreationInMs:50000}")
     private Long timeoutCreationInMs;
-
     @Value("${waitforresult.message.enabled:false}")
     private Boolean enabledMessage;
-
     @Value("${waitforresult.message.name:blue}")
     private String messageName;
-
     @Value("${waitforresult.message.topicPrefix:end-message}")
     private String prefixTopicMessage;
-
     @Value("${waitforresult.message.timeoutCreationInMs:50000}")
     private Long timeoutMessageInMs;
-
     @Value("${waitforresult.resultworker.implementation:HOST}")
     private String workerImplementation;
-
-    @Autowired
-    ZeebeClient zeebeClient;
-
-    WithResultAPI withResultAPI;
-
-    Map<TYPE_REPORT, Map<Integer, Report>> report = new HashMap<>();
-
-
-    BlockingQueue<ResultCreation> queue = new LinkedBlockingQueue<>(10000);
-
 
     public void initialize() {
         report.put(TYPE_REPORT.CREATOR, new ConcurrentHashMap<>());
@@ -88,7 +72,7 @@ public class LoaderC8 {
                 logger.error("Can't get inetAddress: " + e.getMessage());
             }
             logger.info("Enable Creator ResultImplementation {} numberOfThreads {} Loops {} EnableCreator {} enableMessage {} podName{}",
-                    strategy.toString(),
+                    strategy,
                     numberOfThreads, numberOfLoops,
                     enabledCreator, enabledMessage,
                     podName);
@@ -139,7 +123,7 @@ public class LoaderC8 {
         long totalExecutionTime = 0;
         int correct = 0;
         int errors = 0;
-        int timeout=0;
+        int timeout = 0;
         Report report = getReport(TYPE_REPORT.CREATOR, prefix);
         report.markBeginTime();
 
@@ -151,9 +135,11 @@ public class LoaderC8 {
                 String jobKey = podName + "_" + prefix + "_" + i;
 
                 variables.put("applicationKeyColor", jobKey);
-                ExecuteWithResult execute = withResultAPI.processInstanceWithResult(processId, variables, jobKey, prefixTopicCreation, timeoutCreationInMs);
+                ExecuteWithResult execute = withResultAPI.processInstanceWithResult(processId,
+                        variables, jobKey, prefixTopicCreation,
+                        Duration.ofMillis(timeoutCreationInMs)).join();
 
-                if (execute.creationError ) {
+                if (execute.creationError) {
                     errors++;
                 } else if (execute.timeOut) {
                     timeout++;
@@ -199,7 +185,7 @@ public class LoaderC8 {
         long totalExecutionTime = 0;
         int corrects = 0;
         int errors = 0;
-        int timeouts=0;
+        int timeouts = 0;
         try {
             Report report = getReport(TYPE_REPORT.MESSAGE, prefix);
 
@@ -209,7 +195,7 @@ public class LoaderC8 {
                 ResultCreation resultCreation = queue.take();
 
                 // Need to start the begin time to calculate the throughput
-                if (report.beginTime==null)
+                if (report.beginTime == null)
                     report.markBeginTime();
 
 
@@ -224,8 +210,8 @@ public class LoaderC8 {
                             Collections.emptyMap(),
                             resultCreation.resultData,
                             prefixTopicMessage,
-                            timeoutMessageInMs);
-                    if (execute.messageError ) {
+                            Duration.ofMillis(timeoutCreationInMs)).join();
+                    if (execute.messageError) {
                         errors++;
                     } else if (execute.timeOut) {
                         timeouts++;
@@ -319,9 +305,6 @@ public class LoaderC8 {
                 numberOfThreads);
     }
 
-
-    public enum TYPE_REPORT {CREATOR, MESSAGE}
-
     /**
      * getReport Each thread maintains a report
      *
@@ -341,6 +324,8 @@ public class LoaderC8 {
         report.get(type).forEach((threadName, report) -> reportList.add(report.getCopy()));
         return reportList;
     }
+
+    public enum TYPE_REPORT {CREATOR, MESSAGE}
 
     private class Report {
         public int countLoops;

@@ -22,7 +22,7 @@ waitforresult:
     numberOfLoops: 6000
     numberOfThreads: 5
     topicPrefix: end-creation-
-    timeoutCreationInMs: 50000
+    timeoutCreationInMs: 5000
 
   message:
     # Enable the message only if you enabled the creator: source of data is produce by the creator

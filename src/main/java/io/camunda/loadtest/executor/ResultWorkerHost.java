@@ -14,45 +14,47 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * This implementation create one worker immediately, per host.
- * In the process varaible, a value "jobKey" is present, to find the correct thread to unlock
- *
+ * In the process variable, a value "jobKey" is present, to find the correct thread to unlock
  */
 public class ResultWorkerHost extends ResultWorker {
 
+    static final Map<String, LockObjectTransporter> lockObjectsMap = new ConcurrentHashMap<>();
+    static final ConcurrentHashMap<String, JobWorker> mapWorker = new ConcurrentHashMap<>();
+    final ZeebeClient zeebeClient;
+    final HandlerEndResult handleMarker;
+    final String podName;
     Logger logger = LoggerFactory.getLogger(ResultWorkerHost.class.getName());
 
-    ZeebeClient zeebeClient;
-    HandlerEndResult HandleMarker= new HandlerEndResult();
-
-
-    ConcurrentHashMap<String, JobWorker> mapWorker = new ConcurrentHashMap<>();
-
-    String podName;
-    ResultWorkerHost(ZeebeClient zeebeClient, String podName) {
+    ResultWorkerHost(ZeebeClient zeebeClient, String podName, WithResultAPI withResultAPI) {
         this.zeebeClient = zeebeClient;
         this.podName = podName;
+        this.handleMarker = new HandlerEndResult(withResultAPI);
     }
 
-    @Override
-    public void initialize() {
-
-    }
 
     /**
-     * Open the transaction. Create a dedicated worker for this transaction.
-     * @param context
-     * @param prefixTopicWorker
-     * @param jobKey
-     * @return
+     * Open the transaction. Worker may be created the first time, then reuse. It return a lockObjectTransporter, and the caller can modify it.
+     * The caller will execute the command (create a process instance, execute the user task, publish the message). The caller must pass the jobKey
+     * as a process variable WithResultAPI.PROCESS_VARIABLE_JOB_KEY. The handler retrieve the key, then the object, and will call the callback according
+     * the caller.
+     *
+     * @param context           information
+     * @param prefixTopicWorker prefix of the worker, to calculate the topic for the dynamic worker
+     * @param jobKey            key for the handler to retrieve the correct lockObjetTransporter
+     * @param caller            who call the transaction, to have the callback method
+     * @return the object transporter
      */
     @Override
-    public LockObjectTransporter openTransaction(String context, String prefixTopicWorker, String jobKey) {
+    public LockObjectTransporter openTransaction(String context, String prefixTopicWorker, String jobKey, LockObjectTransporter.CALLER caller) {
         LockObjectTransporter lockObjectTransporter = new LockObjectTransporter();
         lockObjectTransporter.jobKey = jobKey;
         lockObjectTransporter.context = context;
-        JobWorker worker = getWorker(getTopic(context, prefixTopicWorker,jobKey));
+        lockObjectTransporter.caller = caller;
 
-        logger.debug("Register on prefix[{}] jobKey[{}]", prefixTopicWorker+podName, jobKey);
+        logger.debug("Register worker[{}] jobKey[{}]", getTopic(context, prefixTopicWorker, jobKey), jobKey);
+
+        JobWorker worker = getWorker(getTopic(context, prefixTopicWorker, jobKey));
+
         synchronized (lockObjectsMap) {
             lockObjectsMap.put(jobKey, lockObjectTransporter);
         }
@@ -62,27 +64,17 @@ public class ResultWorkerHost extends ResultWorker {
 
     /**
      * The topic is different per host
+     *
      * @param context
      * @param prefixTopicWorker
      * @param jobKey
      * @return
      */
     @Override
-    public String getTopic(String context, String prefixTopicWorker, String jobKey)
-    {
-        return prefixTopicWorker+podName;
+    public String getTopic(String context, String prefixTopicWorker, String jobKey) {
+        return prefixTopicWorker + podName;
     }
 
-    @Override
-    public void waitForResult(LockObjectTransporter lockObjectTransporter, long timeOut) {
-        lockObjectTransporter.waitForResult(timeOut);
-        logger.debug("Receive answer jobKey[{}] notification? {} inprogress {} context{}",
-                lockObjectTransporter.jobKey,
-                lockObjectTransporter.notification,
-                lockObjectsMap.size(),
-                lockObjectTransporter.context);
-
-    }
 
     @Override
     public void closeTransaction(LockObjectTransporter lockObjectTransporter) {
@@ -94,27 +86,33 @@ public class ResultWorkerHost extends ResultWorker {
     }
 
 
-private JobWorker getWorker(String topicName) {
-    JobWorker worker = mapWorker.get(topicName);
-    if (worker == null) {
-        synchronized (this) {
-            if (mapWorker.get(topicName) == null) {
-                worker = zeebeClient.newWorker()
-                        .jobType(topicName)
-                        .handler(HandleMarker)
-                        .streamEnabled(true)
-                        .open();
-                mapWorker.put(topicName, worker);
+    private JobWorker getWorker(String topicName) {
+        JobWorker worker = mapWorker.get(topicName);
+        if (worker == null) {
+            synchronized (this) {
+                if (mapWorker.get(topicName) == null) {
+                    worker = zeebeClient.newWorker()
+                            .jobType(topicName)
+                            .handler(handleMarker)
+                            .streamEnabled(true)
+                            .open();
+                    mapWorker.put(topicName, worker);
+                }
             }
         }
+        return worker;
     }
-    return worker;
 
-}
     /**
      * Handle the job. This worker register under the correct topic, and capture when it's come here
      */
     private class HandlerEndResult implements JobHandler {
+        WithResultAPI withResultAPI;
+
+        HandlerEndResult(WithResultAPI withResultAPI) {
+            this.withResultAPI = withResultAPI;
+        }
+
         public void handle(JobClient jobClient, ActivatedJob activatedJob) throws Exception {
             // Get the variable "lockKey"
             jobClient.newCompleteCommand(activatedJob.getKey()).send();
@@ -132,15 +130,17 @@ private JobWorker getWorker(String topicName) {
             lockObjectTransporter.elementInstanceKey = activatedJob.getElementInstanceKey();
             logger.debug("HandleMarkerDynamicWorker jobKey[{}] variables[{}]", jobKey, lockObjectTransporter.processVariables);
 
-            // Notify the thread waiting on this item
-            lockObjectTransporter.notifyResult();
+            // notify withResult that we got the answer
+            switch (lockObjectTransporter.caller) {
+                case PROCESSINSTANCE -> withResultAPI.completeLaterProcessInstanceWithResult(lockObjectTransporter);
+                case USERTASK -> withResultAPI.completeLaterExecuteTaskWithResult(lockObjectTransporter);
+                case MESSAGE -> withResultAPI.completeLaterPublishMessageWithResult(lockObjectTransporter);
+
+            }
+            withResultAPI.completeLaterProcessInstanceWithResult(lockObjectTransporter);
+
         }
     }
-
-
-
-
-    static final Map<String, LockObjectTransporter> lockObjectsMap = new ConcurrentHashMap<>();
 
 
 }

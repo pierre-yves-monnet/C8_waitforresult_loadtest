@@ -55,7 +55,7 @@ spec:
             - name: WAITFORRESULT_MESSAGE_ENABLED
               value: "true"
             - name: WAITFORRESULT_CREATOR_NUMBEROFTHREADS
-              value: "23"
+              value: "60"
             - name: WAITFORRESULT_CREATOR_NUMBEROFLOOPS
               value: "10000"
             - name: WAITFORRESULT_CREATOR_PROCESSID

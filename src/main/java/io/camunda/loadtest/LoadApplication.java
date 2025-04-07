@@ -29,15 +29,16 @@ public class LoadApplication {
 
     @Autowired
     LoaderC8 loaderC8;
+
     public static void main(String[] args) {
         SpringApplication.run(LoadApplication.class, args);
     }
 
     @PostConstruct
     public void init() {
-        logger.info("Start LoadApplication ZeebeGrpcAddress[{}] ", config==null? "null": config.getGrpcAddress());
+        logger.info("Start LoadApplication ZeebeGrpcAddress[{}] ", config == null ? "null" : config.getGrpcAddress());
         CompletableFuture.runAsync(() -> {
-            logger.info("Initialize application in thread {}",Thread.currentThread().getName());
+            logger.info("Initialize application in thread {}", Thread.currentThread().getName());
             simpleWorker.initialize();
             loaderC8.initialize();
         });
