@@ -19,9 +19,10 @@ waitforresult:
 
   creator:
     enabled: true
-    processId: WaitForResultLoadTest
+    # WaitForResultLoadTest
+    processId: BPO_Camunda_Benchmark_JobWorkerUT
     numberOfLoops: 6000
-    numberOfThreads: 40
+    numberOfThreads: 44
     topicPrefix: end-creation-
     timeoutCreationInMs: 50000
 
@@ -30,13 +31,15 @@ waitforresult:
   message:
     # Enable the message only if you enabled the creator: source of data is produce by the creator
     enabled: true
-    name: blue
+    names: Activity_First_User_Task, Activity_Last_User_Task
     topicPrefix: end-msg-
-    timeoutMessageInMs: 50000
+    # use JOBKEY or PROCESSINSTANCEKEY
+    # Attention, using PROCESSINSTANCEKEY means this process variable exist and is populated by an activity like "initialiseServiceTask"
+    keyCorrelation: PROCESSINSTANCEKEY
+    timeoutMessageLiveInMs: 100000
 
   worker:
     enabled: true
-    implementation: DYNAMIC
 
 logging:
   level:

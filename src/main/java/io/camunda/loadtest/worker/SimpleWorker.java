@@ -1,5 +1,6 @@
 package io.camunda.loadtest.worker;
 
+
 import io.camunda.zeebe.client.ZeebeClient;
 import io.camunda.zeebe.client.api.response.ActivatedJob;
 import io.camunda.zeebe.client.api.worker.JobClient;
@@ -12,6 +13,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 @Component
 @ConfigurationProperties()
 public class SimpleWorker {
@@ -22,6 +25,8 @@ public class SimpleWorker {
     HandleInitServiceTask handleInitServiceTask = new HandleInitServiceTask();
     MiddleServiceTask middleServiceTask = new MiddleServiceTask();
     CloseServiceTask closeServiceTask = new CloseServiceTask();
+    InitializeServiceTask initializeServiceTask = new InitializeServiceTask();
+
     @Value("${waitforresult.worker.enabled:true}")
     private Boolean enabled;
 
@@ -44,6 +49,25 @@ public class SimpleWorker {
                         .handler(closeServiceTask)
                         .streamEnabled(true)
                         .open();
+
+                JobWorker worker4 = zeebeClient.newWorker()
+                        .jobType("InitialiseTaskWorker")
+                        .handler(initializeServiceTask)
+                        .streamEnabled(true)
+                        .open();
+                JobWorker worker5 = zeebeClient.newWorker()
+                        .jobType("MiddleTaskWorker")
+                        .handler(middleServiceTask)
+                        .streamEnabled(true)
+                        .open();
+                JobWorker worker6 = zeebeClient.newWorker()
+                        .jobType("CloseTaskWorker")
+                        .handler(closeServiceTask)
+                        .streamEnabled(true)
+                        .open();
+
+
+
             } catch (Error e) {
                 logger.error("error {}", e.getMessage());
             } catch (Exception e) {
@@ -76,6 +100,15 @@ public class SimpleWorker {
         public void handle(JobClient jobClient, ActivatedJob activatedJob) throws Exception {
             logger.debug("Job handled: Type[{}] PI[{}]", activatedJob.getType(), activatedJob.getProcessInstanceKey());
             jobClient.newCompleteCommand(activatedJob.getKey()).send();
+        }
+    }
+
+    private class InitializeServiceTask implements JobHandler {
+        public void handle(JobClient jobClient, ActivatedJob activatedJob) throws Exception {
+            logger.debug("Job handled: Type[{}] PI[{}]", activatedJob.getType(), activatedJob.getProcessInstanceKey());
+            jobClient.newCompleteCommand(activatedJob.getKey())
+                    .variables(Map.of("processInstanceKey", activatedJob.getProcessInstanceKey()))
+                    .send();
         }
     }
 

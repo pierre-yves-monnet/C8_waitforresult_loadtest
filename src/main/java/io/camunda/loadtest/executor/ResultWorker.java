@@ -35,6 +35,7 @@ public abstract class ResultWorker {
         public Task userTask;
         public CompletableFuture<ExecuteWithResult> future = new CompletableFuture<>();
         public String context;
+        public long processInstanceKey;
         public JobWorker worker;
 
         public synchronized void waitForResult(long timeoutDurationInMs) {

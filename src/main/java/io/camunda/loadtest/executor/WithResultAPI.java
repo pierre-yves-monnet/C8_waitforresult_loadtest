@@ -150,7 +150,7 @@ public class WithResultAPI {
         resultWorker.closeTransaction(lockObjectTransporter);
 
         Long endTime = System.currentTimeMillis();
-        executeWithResult.processInstance = Long.valueOf(lockObjectTransporter.userTask.getProcessInstanceKey());
+        executeWithResult.processInstanceKey = Long.valueOf(lockObjectTransporter.userTask.getProcessInstanceKey());
         executeWithResult.executionTime = endTime - lockObjectTransporter.beginTime;
 
         executeWithResult.timeOut = false;
@@ -208,7 +208,8 @@ public class WithResultAPI {
         try {
 
             ProcessInstanceEvent processInstanceEvent = zeebeClient.newCreateInstanceCommand().bpmnProcessId(processId).latestVersion().variables(processVariables).send().join();
-            executeWithResult.processInstance = processInstanceEvent.getProcessInstanceKey();
+            executeWithResult.processInstanceKey = processInstanceEvent.getProcessInstanceKey();
+            lockObjectTransporter.processInstanceKey = processInstanceEvent.getProcessInstanceKey();
             // logger.info("Create process instance {} jobKey [{}]", executeWithResult.processInstance,jobKey);
         } catch (Exception e) {
             logger.error("Can't create process instance[{}] : {}", processId, e.getMessage());
@@ -243,7 +244,7 @@ public class WithResultAPI {
         // retrieve the taskId where the currentprocess instance is
         executeWithResult.elementId = lockObjectTransporter.elementId;
         executeWithResult.elementInstanceKey = lockObjectTransporter.elementInstanceKey;
-
+        executeWithResult.processInstanceKey = lockObjectTransporter.processInstanceKey;
         resultWorker.closeTransaction(lockObjectTransporter);
 
         Long endTime = System.currentTimeMillis();
@@ -260,7 +261,7 @@ public class WithResultAPI {
                     "Snitch_marker_OK";
         }
         logger.debug("RESULT JobKey[{}] in {} ms (timeout {} ms) Pid[{}] {} variables[{}]", lockObjectTransporter.jobKey, endTime - lockObjectTransporter.beginTime,
-                lockObjectTransporter.timeoutDuration.toMillis(), executeWithResult.processInstance, doubleCheckAnalysis,
+                lockObjectTransporter.timeoutDuration.toMillis(), executeWithResult.processInstanceKey, doubleCheckAnalysis,
                 lockObjectTransporter.processVariables);
 
 
@@ -359,7 +360,7 @@ public class WithResultAPI {
         String doubleCheckAnalysis = "";
         logger.debug("RESULT JobKey[{}] in {} ms (timeout {} ms) Pid[{}] {} variables[{}]", lockObjectTransporter.jobKey,
                 endTime - lockObjectTransporter.beginTime,
-                lockObjectTransporter.timeoutDuration.toMillis(), executeWithResult.processInstance, doubleCheckAnalysis,
+                lockObjectTransporter.timeoutDuration.toMillis(), executeWithResult.processInstanceKey, doubleCheckAnalysis,
                 lockObjectTransporter.processVariables);
 
         lockObjectTransporter.future.complete(executeWithResult);

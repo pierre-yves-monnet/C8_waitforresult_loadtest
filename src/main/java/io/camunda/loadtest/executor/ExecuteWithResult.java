@@ -12,7 +12,7 @@ public class ExecuteWithResult {
     public boolean messageError = false;
     public boolean timeOut = false;
     public long executionTime;
-    public Long processInstance;
+    public Long processInstanceKey;
 
     // elementId is the ID of the element, defined as the ID in the modeler. Example "ReviewApplication"
     public String elementId;

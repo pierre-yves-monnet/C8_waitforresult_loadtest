@@ -11,7 +11,7 @@ mvn clean install
 docker rmi pierre-yves-monnet/waitforresult:1.0.0
 docker rmi ghcr.io/pierre-yves-monnet/waitforresult:1.0.0
 
-docker build -t pierre-yves-monnet/waitforresult:1.0.8 .
+docker build -t pierre-yves-monnet/waitforresult:1.1.0 .
 ````
 
 The docker image is built using the Dockerfile present on the root level.
@@ -21,7 +21,7 @@ The docker image is built using the Dockerfile present on the root level.
 Push the image to my personal ghcr
 
 ````
-docker tag pierre-yves-monnet/waitforresult:1.0.8 ghcr.io/pierre-yves-monnet/waitforresult:latest
+docker tag pierre-yves-monnet/waitforresult:1.1.0 ghcr.io/pierre-yves-monnet/waitforresult:latest
 docker push ghcr.io/pierre-yves-monnet/waitforresult:latest
 ````
 
@@ -31,7 +31,7 @@ https://github.com/pierre-yves-monnet/waitforresult/pkgs/container
 # Start the test
 
 ```shell
-cs kubernetes
+cd kubernetes
 kubectl create -f waitforresult.yaml
 ```
 

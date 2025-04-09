@@ -55,15 +55,15 @@ spec:
             - name: WAITFORRESULT_MESSAGE_ENABLED
               value: "true"
             - name: WAITFORRESULT_CREATOR_NUMBEROFTHREADS
-              value: "60"
+              value: "44"
             - name: WAITFORRESULT_CREATOR_NUMBEROFLOOPS
               value: "10000"
             - name: WAITFORRESULT_CREATOR_PROCESSID
-              value: WaitForResultLoadTest
+              value: BPO_Camunda_Benchmark_JobWorkerUT
             - name: WAITFORRESULT_CREATOR_TOPICPREFIX
               value: "end-creation-"
-            - name: WAITFORRESULT_MESSAGE_NAME
-              value: "blue"
+            - name: WAITFORRESULT_MESSAGE_NAMES
+              value: "Activity_First_User_Task, Activity_Last_User_Task"
             - name: WAITFORRESULT_MESSAGE_TOPICPREFIX
               value: "end-msg-"
             - name: WAITFORRESULT_RESULTWORKER_IMPLEMENTATION
