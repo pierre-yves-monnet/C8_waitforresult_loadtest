@@ -33,6 +33,7 @@ waitforresult:
     enabled: true
     names: Activity_First_User_Task, Activity_Last_User_Task
     topicPrefix: end-msg-
+    numberOfThreads: 88
     # use JOBKEY or PROCESSINSTANCEKEY
     # Attention, using PROCESSINSTANCEKEY means this process variable exist and is populated by an activity like "initialiseServiceTask"
     keyCorrelation: PROCESSINSTANCEKEY

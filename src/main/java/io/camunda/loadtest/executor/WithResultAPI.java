@@ -323,7 +323,7 @@ public class WithResultAPI {
 
             // logger.info("Create process instance {} jobKey [{}]", executeWithResult.processInstance,jobKey);
         } catch (Exception e) {
-            logger.error("Can't send message[{}] : {}", messageName, e.getMessage());
+            // logger.error("Can't send message[{}] : {}", messageName, e.getMessage());
             executeWithResult.messageError = true;
             lockObjectTransporter.future.complete(executeWithResult);
         }

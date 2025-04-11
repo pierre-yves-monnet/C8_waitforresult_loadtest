@@ -56,8 +56,10 @@ spec:
               value: "true"
             - name: WAITFORRESULT_CREATOR_NUMBEROFTHREADS
               value: "44"
+            - name: WAITFORRESULT_MESSAGE_NUMBEROFTHREADS
+              value: "60"
             - name: WAITFORRESULT_CREATOR_NUMBEROFLOOPS
-              value: "10000"
+              value: "50000"
             - name: WAITFORRESULT_CREATOR_PROCESSID
               value: BPO_Camunda_Benchmark_JobWorkerUT
             - name: WAITFORRESULT_CREATOR_TOPICPREFIX
